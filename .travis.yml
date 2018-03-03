@@ -31,6 +31,10 @@ after_success:
 - docker build -t $NOTIFICATION_SERVICE:$COMMIT ./notification-service
 - docker tag $NOTIFICATION_SERVICE:$COMMIT $NOTIFICATION_SERVICE:$TAG
 - docker push $NOTIFICATION_SERVICE
+- export MONITORING=sqshq/piggymetrics-monitoring
+- docker build -t $MONITORING:$COMMIT ./monitoring
+- docker tag $MONITORING:$COMMIT $MONITORING:$TAG
+- docker push $MONITORING
 - export MONGO_DB=sqshq/piggymetrics-mongodb
 - docker build -t $MONGO_DB:$COMMIT ./mongodb
 - docker tag $MONGO_DB:$COMMIT $MONGO_DB:$TAG
