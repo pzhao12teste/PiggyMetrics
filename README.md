@@ -15,7 +15,7 @@ With a pretty neat user interface, by the way.
 
 ## Functional services
 
-PiggyMetrics was decomposed into three core microservices. All of them are independently deployable applications, organized around certain business domains.
+PiggyMetrics was decomposed into three core microservices. All of them are independently deployable applications, organized around certain business capability.
 
 <img width="880" alt="Functional services" src="https://cloud.githubusercontent.com/assets/6069066/13900465/730f2922-ee20-11e5-8df0-e7b51c668847.png">
 
@@ -32,14 +32,14 @@ POST	| /accounts/	| Register new account	|   | ×
 
 
 #### Statistics service
-Performs calculations on major statistics parameters and captures time series for each account. Datapoint contains values, normalized to base currency and time period. This data is used to track cash flow dynamics in account lifetime.
+Performs calculations on major statistics parameters and captures time series for each account. Datapoint contains values, normalized to base currency and time period. This data is used to track cash flow dynamics in account lifetime (fancy charts not yet implemented in UI).
 
 Method	| Path	| Description	| User authenticated	| Available from UI
 ------------- | ------------------------- | ------------- |:-------------:|:----------------:|
-GET	| /statistics/{account}	| Get specified account statistics	          |  | 	
+GET	| /statistics/{account}	        | Get specified account statistics	          |  | 	
 GET	| /statistics/current	| Get current account statistics	| × | × 
 GET	| /statistics/demo	| Get demo account statistics	|   | × 
-PUT	| /statistics/{account}	| Create or update time series datapoint for specified account	|   | 
+PUT	| /accounts/{account}	| Create or update time series datapoint for specified account	|   | 
 
 
 #### Notification service
@@ -50,10 +50,10 @@ Method	| Path	| Description	| User authenticated	| Available from UI
 GET	| /notifications/settings/current	| Get current account notification settings	| × | ×	
 PUT	| /notifications/settings/current	| Save current account notification settings	| × | ×
 
-#### Notes
+#### N.B.
 - Each microservice has it's own database, so there is no way to bypass API and access persistance data directly.
-- In this project, I use MongoDB as a primary database for each service. It might also make sense to have a polyglot persistence architecture (сhoose the type of db that is best suited to service requirements).
-- Service-to-service communication is quite simplified: microservices talking using only synchronous REST API. Common practice in a real-world systems is to use combination of interaction styles. For example, perform synchronous GET request to retrieve data and use asynchronous approach via Message broker for create/update operations in order to decouple services and buffer messages. However, this brings us to the [eventual consistency](http://martinfowler.com/articles/microservice-trade-offs.html#consistency) world.
+- In this project, I use Mongodb as a primary database for each service. It might also make sense to have a polyglot persistence architecture (сhoose the type of db that is best suited to service requirements).
+- Service-to-service communication is quite simplified: microservices talking using only synchronous REST API. Common practice in a real-world systems is to use combination of interaction styles. For example, perform synchronous GET request to retrieve data and use asynchronous approach via Message broker for create/update operations in order to decouple services and buffer messages. However, this brings us in [eventual consistency](http://martinfowler.com/articles/microservice-trade-offs.html#consistency) world.
 
 ## Infrastructure services
 There's a bunch of common patterns in distributed systems, which could help us to make described core services work. [Spring cloud](http://projects.spring.io/spring-cloud/) provides powerful tools that enhance Spring Boot applications behaviour to implement those patterns. I'll cover them briefly.
@@ -61,12 +61,12 @@ There's a bunch of common patterns in distributed systems, which could help us t
 ### Config service
 [Spring Cloud Config](http://cloud.spring.io/spring-cloud-config/spring-cloud-config.html) is horizontally scalable centralized configuration service for distributed systems. It uses a pluggable repository layer that currently supports local storage, Git, and Subversion. 
 
-In this project, I use `native profile`, which simply loads config files from the local classpath. You can see `shared` directory in [Config service resources](https://github.com/sqshq/PiggyMetrics/tree/master/config/src/main/resources). Now, when Notification-service requests it's configuration, Config service responses with `shared/notification-service.yml` and `shared/application.yml` (which is shared between all client applications).
+In this project, I use `native profile`, which simply loads config files from the local classpath. You can see `shared` directory in [Config service resources](https://github.com/sqshq/PiggyMetrics/tree/master/config/src/main/resources). Those config files are shared with all applications in cluster. For example, when Statistics-service requests it's configuration, Config service will response with `shared/statistics-service.yml` and `shared/application.yml` (which is shared between all client applications).
 
 ##### Client side usage
-Just build Spring Boot application with `spring-cloud-starter-config` dependency, autoconfiguration will do the rest.
+Just build Spring Boot application with `spring-cloud-starter-config`. That's it.
 
-Now you don't need any embedded properties in your application. Just provide `bootstrap.yml` with application name and Config service url:
+You now don't need any embedded properties in your application. Just provide `bootstrap.yml` with application name and Config service url:
 ```yml
 spring:
   application:
@@ -87,7 +87,7 @@ Also, you could use Repository [webhooks to automate this process](http://cloud.
 
 ##### Notes
 - There are some limitations for dynamic refresh though. `@RefreshScope` doesn't work with `@Configuration` classes and doesn't affect `@Scheduled` methods
-- `fail-fast` property means that Spring Boot application will fail startup immediately, if it cannot connect to the Config Service.
+- `fail-fast` property means that Spring Boot application will fail startup immediately, if it cannot connect to the Config Service. That's very useful when we start [all applications together](https://github.com/sqshq/PiggyMetrics#how-to-run-all-the-things)
 - There are significant [security notes](https://github.com/sqshq/PiggyMetrics#security) below
 
 ### Auth service
@@ -95,11 +95,11 @@ Authorization responsibilities are completely extracted to separate server, whic
 
 In this project, I use [`Password credentials`](https://tools.ietf.org/html/rfc6749#section-4.3) grant type for users authorization (since it's used only by native PiggyMetrics UI) and [`Client Credentials`](https://tools.ietf.org/html/rfc6749#section-4.4) grant for microservices authorization.
 
-Spring Cloud Security provides convenient annotations and autoconfiguration to make this really easy to implement from both server and client side. You can learn more about it in [documentation](http://cloud.spring.io/spring-cloud-security/spring-cloud-security.html) and check configuration details in [Auth Server code](https://github.com/sqshq/PiggyMetrics/tree/master/auth-service/src/main/java/com/piggymetrics/auth).
+Spring Cloud Security provides convenient annotations to make this really easy to implement from both server and client side. You can learn more about it in [documentation](http://cloud.spring.io/spring-cloud-security/spring-cloud-security.html) and check configuration details in [Auth Server code](https://github.com/sqshq/PiggyMetrics/tree/master/auth-service/src/main/java/com/piggymetrics/auth).
 
 From the client side, everything works exactly the same as with traditional session-based authorization. You can retrieve `Principal` object from request, check user's roles and other stuff with expression-based access control and `@PreAuthorize` annotation.
 
-Each client in PiggyMetrics (account-service, statistics-service, notification-service and browser) has a scope: `server` for backend services, and `ui` - for the browser. So we can also protect controllers from external access, for example:
+Each client in PiggyMetrics (account-service, statistics-service, notification-service and browser) has a scope: `server` for backend services, and `ui` - for browser. So we can also protect controllers from external access, for example:
 
 ``` java
 @PreAuthorize("#oauth2.hasScope('server')")
@@ -110,9 +110,9 @@ public List<DataPoint> getStatisticsByAccountName(@PathVariable String name) {
 ```
 
 ### API Gateway
-As you can see, there are three core services, which expose external API to client. In a real-world systems, this number can grow very quickly as well as whole system complexity. Actually, hundreds of services might be involved in rendering of one complex webpage.
+As you can see, there are three core services, which expose external API to client. In a real-world systems, this number can grow very quickly as well as whole system complexity. Actualy, hundreds of services might be involved in rendering one complex webpage.
 
-In theory, a client could make requests to each of the microservices directly. But obviously, there are challenges and limitations with this option, like necessity to know all endpoints addresses, perform http request for each peace of information separately, merge the result on a client side. Another problem is non web-friendly protocols which might be used on the backend.
+In theory, a client could make requests to each of the microservices directly. But obviously, there are challenges and limitations with this option, like necessity to know all endpoints addresses, perform http request for each peace of information separately, merge the result on a client side. Another problem is non web-friendly protocols, which might be used on the backend.
 
 Usually a much better approach is to use API Gateway. It is a single entry point into the system, used to handle requests by routing them to the appropriate backend service or by invoking multiple backend services and [aggregating the results](http://techblog.netflix.com/2013/01/optimizing-netflix-api.html). Also, it can be used for authentication, insights, stress and canary testing, service migration, static response handling, active traffic management.
 
@@ -147,7 +147,7 @@ spring:
 
 Now, on application startup, it will register with Eureka Server and provide meta-data, such as host and port, health indicator URL, home page etc. Eureka receives heartbeat messages from each instance belonging to a service. If the heartbeat fails over a configurable timetable, the instance will be removed from the registry.
 
-Also, Eureka provides a simple interface, where you can track running services and number of available instances: `http://localhost:8761`
+Also, Eureka provides simple interface, where you can track running services and number of available instances: `http://localhost:8761`
 
 ### Load balancer, Circuit breaker and Http client
 
@@ -200,13 +200,10 @@ Let's see our system behavior under load: Account service calls Statistics servi
 | Well behaving system. The throughput is about 22 requests/second. Small number of active threads in Statistics service. The median service time is about 50 ms. | The number of active threads is growing. We can see purple number of thread-pool rejections and therefore about 30-40% of errors, but circuit is still closed. | Half-open state: the ratio of failed commands is more than 50%, the circuit breaker kicks in. After sleep window amount of time, the next request is let through. | 100 percent of the requests fail. The circuit is now permanently open. Retry after sleep time won't close circuit again, because the single request is too slow.
 
 ### Log analysis
-
 Centralized logging can be very useful when attempting to identify problems in a distributed environment. Elasticsearch, Logstash and Kibana stack lets you search and analyze your logs, utilization and network activity data with ease.
 Ready-to-go Docker configuration described [in my other project](http://github.com/sqshq/ELK-docker).
 
 ## Security
-
-An advanced security configuration is beyond the scope of this proof-of-concept project. For a more realistic simulation of a real system, consider to use https, JCE keystore to encrypt Microservices passwords and Config server properties content (see [documentation](http://cloud.spring.io/spring-cloud-config/spring-cloud-config.html#_security) for details).
 
 ## Infrastructure automation
 
@@ -224,33 +221,15 @@ In this [configuration](https://github.com/sqshq/PiggyMetrics/blob/master/.travi
 
 ## How to run all the things?
 
-Keep in mind, that you are going to start 8 Spring Boot applications, 4 MongoDB instances and RabbitMq. Make sure you have `4 Gb` RAM available on your machine. You can always run just vital services though: Gateway, Registry, Config, Auth Service and Account Service.
+Keep in mind, that you are going to start 8 Spring Boot applications, 4 MongoDb instances and RabbitMq. Make sure you have `8 Gb` RAM available on your machine. You can always run just vital services though: `Gateway`, `Registry`, `Config`, `Auth Service` and `Account Service`.
 
 #### Before you start
 - Install Docker and Docker Compose.
-- Export environment variables: `CONFIG_SERVICE_PASSWORD`, `NOTIFICATION_SERVICE_PASSWORD`, `STATISTICS_SERVICE_PASSWORD`, `ACCOUNT_SERVICE_PASSWORD`, `MONGODB_PASSWORD` (make sure they were exported: `printenv`)
-- Make sure to build the project: `mvn package [-DskipTests]`
+- Export environment variables: `CONFIG_SERVICE_PASSWORD`, `NOTIFICATION_SERVICE_PASSWORD`, `STATISTICS_SERVICE_PASSWORD`, `ACCOUNT_SERVICE_PASSWORD`, `MONGODB_PASSWORD`
 
 #### Production mode
-In this mode, all latest images will be pulled from Docker Hub.
-Just copy `docker-compose.yml` and hit `docker-compose up`
 
 #### Development mode
-If you'd like to build images yourself (with some changes in the code, for example), you have to clone all repository and build artifacts with maven. Then, run `docker-compose -f docker-compose.yml -f docker-compose.dev.yml up`
-
-`docker-compose.dev.yml` inherits `docker-compose.yml` with additional possibility to build images locally and expose all containers ports for convenient development.
-
-#### Important endpoints
-- http://localhost:80 - Gateway
-- http://localhost:8761 - Eureka Dashboard
-- http://localhost:9000/hystrix - Hystrix Dashboard (paste Turbine stream link on the form)
-- http://localhost:8989 - Turbine stream (source for the Hystrix Dashboard)
-- http://localhost:15672 - RabbitMq management (default login/password: guest/guest)
-
-#### Notes
-All Spring Boot applications require already running [Config Server](https://github.com/sqshq/PiggyMetrics#config-service) for startup. But we can start all containers simultaneously because of `depends_on` docker-compose option.
-
-Also, Service Discovery mechanism needs some time after all applications startup. Any service is not available for discovery by clients until the instance, the Eureka server and the client all have the same metadata in their local cache, so it could take 3 heartbeats. Default heartbeat period is 30 seconds.
 
 ## Feedback welcome
 
